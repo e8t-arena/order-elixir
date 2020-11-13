@@ -24,3 +24,4 @@ orders_simulation-*.tar
 
 dev.txt
 /scripts
+mix.lock
