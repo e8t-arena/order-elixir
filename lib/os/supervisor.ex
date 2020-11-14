@@ -3,12 +3,12 @@ defmodule OS.Supervisor do
 
   alias OS.{Utils}
 
-  def start_link(init_arg) do
-    Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+  def start_link(opts) do
+    Supervisor.start_link(__MODULE__, :ok, opts)
   end
 
   @impl true
-  def init(_init_arg) do
+  def init(:ok) do
     order_file_path = [Utils.get_priv_path(), "orders.json"] |> Path.join()
     children = [
       # OS.Register
