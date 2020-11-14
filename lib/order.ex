@@ -24,11 +24,17 @@ defmodule OS.Order do
   @impl true
   def init([order: order]=state) do
     # cal value
-    state = state
-            |> Map.put(
-              :value,
-              Utils.calculate_order_value(order)
-            )
+
+    order = order |> Map.put(
+      :pid, self()
+    )
+
+    state = state |> Map.put(
+      :value,
+      Utils.calculate_order_value(order)
+    ) |> Map.put(
+      :order, order
+    )
 
     state |> IO.inspect()
 

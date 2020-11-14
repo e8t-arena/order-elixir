@@ -6,12 +6,18 @@ defmodule OS.ShelfManager do
 
   %{
     shelves_state: %{"hot":false}
-    order_shelf_map: %{order_id:"hot"}
+    orders: %{order_id:"hot"}
   }
 
-  order_shelf_map acts as a local process register.
+  orders acts as a local process register.
 
-  
+  get_shelves()
+    %{"Hot shelf":[]}
+
+  get_orders()
+
+  get_order(order_id)
+
   """
 
   use GenServer
@@ -41,6 +47,14 @@ defmodule OS.ShelfManager do
     GenServer.cast(__MODULE__, {:update_shelf_state, tag, state})
   end
 
+  def get_shelves() do
+    GenServer.call(__MODULE__, :get_shelves)
+  end
+
+  def get_order(order_id) do
+    GenServer.call(__MODULE__, {:get_order, order_id})
+  end
+
   @impl true
   def init(state) do
     {:ok, state}
@@ -64,6 +78,7 @@ defmodule OS.ShelfManager do
   end
 
   @doc """
+  TODO
   When OverflowShelf is full
   """
   def handle_place_order(order, state, :overflow) do
@@ -89,5 +104,15 @@ defmodule OS.ShelfManager do
   def handle_cast({:update_shelf_state, tag, shelf_state}, %{shelves_state: shelves_state}=state) do
     shelves_state = shelves_state |> Map.put(tag, shelf_state)
     {:noreply, state |> Map.put(:shelves_state, shelves_state)}
+  end
+
+  @impl true
+  def handle_call(:get_shelves, _from, %{orders: orders}) do
+    {:reply, orders |> Utils.format_shelves()}
+  end
+
+  @impl true
+  def handle_call({:get_order, order_id}, _from, %{orders: orders}) do
+    {:reply, orders[order_id]}
   end
 end

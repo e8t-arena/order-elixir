@@ -45,4 +45,15 @@ defmodule OS.Utils do
       shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier
     end
   end
+
+  @doc """
+  Group orders by shelf 
+  """
+  def format_shelves(orders) do
+    orders
+    |> Enum.group_by(
+      fn {_, {key, _}} -> key end, 
+      fn (id, {_, pid}) -> %{id: id, pid: pid} end
+    )
+  end
 end

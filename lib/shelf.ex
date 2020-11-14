@@ -64,7 +64,7 @@ defmodule OS.Shelf do
 
   def pickup_order(%{orders: orders}=state, %{order_id: order_id}) do
     orders = orders |> Map.delete(order_id)
-    %{state | Orders: orders}
+    %{state | orders: orders}
   end
 
   def pickup_order(shelf, order) do
