@@ -1,17 +1,17 @@
-defmodule OS.UtilsTest do
+defmodule OS.LoggerTest do
   use ExUnit.Case
   doctest OS.Utils
 
   alias OS.Utils
 
-  test "calculate order value" do
-    time_span = 5
+  test "display order value" do
     order = 
       [Utils.get_priv_path(), "orders.json"] 
       |> Path.join() 
       |> Utils.load_orders()
       |> elem(1)
       |> hd
-    assert order["temp"] == "frozen"
+    # start order process
+    assert Map.has_key?(order, :value)
   end
 end

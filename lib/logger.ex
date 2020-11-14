@@ -6,12 +6,16 @@ defmodule OS.Logger do
   end
 
   def info(:order, order) do
-    Logger.info("Order: #{inspect(order)}")
+    Logger.info("Order: #{format(order)}")
   end
 
   def info([event: event, order: order]) do
     info(:event, event)
     info(:order, order)
+  end
+
+  def format(order) do
+    :ok
   end
 
   # defdelegate

@@ -14,6 +14,11 @@ defmodule OS.Order do
     {:ok, state}
   end
 
+  @doc """
+  Order is wasted.
+
+  exit order process
+  """
   @impl true
   def handle_info(:check_value, [order: %{value: value}]=state) when value < 3 do
     {:normal, "order is wasted", state}

@@ -1,6 +1,8 @@
 defmodule  OS.OrderProducer do
-  alias OS.{Utils, Logger}
   use Task
+
+  alias OS.{Utils, Logger}
+  alias OS.Utils.Constants.Event
 
   def start_link(arg) do
     Task.start_link(__MODULE__, :run, [arg])
@@ -17,9 +19,10 @@ defmodule  OS.OrderProducer do
   end
   
   def produce([], _), do: Logger.info("End of Orders")
+
   def produce([head | tail], order_interval) do
-    head = head |> Enum.map(fn item -> item |> Map.put(:produced_at, Utils.get_time) end)
-    Logger.info(event: "produce order", order: head)
+    # head = head |> Enum.map(fn item -> item |> Map.put(:produced_at, Utils.get_time) end)
+    Logger.info(event: Event.produce_order(), order: head)
     if order_interval == 0 do
       head
     else

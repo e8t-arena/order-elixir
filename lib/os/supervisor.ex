@@ -11,13 +11,9 @@ defmodule OS.Supervisor do
   def init(:ok) do
     order_file_path = [Utils.get_priv_path(), "orders.json"] |> Path.join()
     children = [
-      # OS.Register
-      # OS.OrderProducer
       # OS.OrderSupervisor
-      # OS.ShelfStore
-      # OS.Shelf
 
-      {OS.ShelfStore},
+      OS.ShelfSupervisor,
       # {OS.OrderProducer, order_file_path: order_file_path }
     ]
 

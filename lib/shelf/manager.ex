@@ -52,6 +52,7 @@ defmodule OS.ShelfManager do
       # update manager state
       shelf_state = handle_place_order(order) |> Shelf.is_full()
       update_shelf_state(tag |> String.downcase(), shelf_state)
+      # TODO: start order process
     end)
   end
 
@@ -60,6 +61,9 @@ defmodule OS.ShelfManager do
     @overflow
   end
 
+  @doc """
+  When OverflowShelf is full
+  """
   def handle_place_order(order, state, :overflow) do
     
   end
