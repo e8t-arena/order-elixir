@@ -9,6 +9,8 @@ defmodule OS.ShelfManager do
     order_shelf_map: %{order_id:"hot"}
   }
 
+  order_shelf_map acts as a local process register.
+
   
   """
 

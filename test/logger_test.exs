@@ -2,7 +2,7 @@ defmodule OS.LoggerTest do
   use ExUnit.Case
   doctest OS.Utils
 
-  alias OS.Utils
+  alias OS.{Utils, Logger}
 
   test "display order value" do
     order = 
@@ -12,6 +12,6 @@ defmodule OS.LoggerTest do
       |> elem(1)
       |> hd
     # start order process
-    assert Map.has_key?(order, :value)
+    assert Logger.format(:order, order) == "order"
   end
 end

@@ -29,4 +29,20 @@ defmodule OS.Utils do
   def fetch_conf(key), do: Application.fetch_env!(get_app_name(), key)
 
   def is_test(), do: Mix.env() == :test
+
+  def get_shelf_decay_modifier(shelf), do: if shelf == "overflow", do: 2, else: 1
+
+  def calculate_order_value(%{
+    "shelfLife" => shelf_life, 
+    "decayRate" => decay_rate,
+    placed_at: placed_at,
+    shelf: shelf
+  }, check_time \\ get_time()) do
+    with order_age <- check_time - placed_at,
+         shelf <- shelf |> String.downcase(),
+         shelf_decay_modifier <- get_shelf_decay_modifier(shelf) do
+      # (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life 
+      shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier
+    end
+  end
 end

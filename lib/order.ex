@@ -1,4 +1,18 @@
 defmodule OS.Order do
+  @module """
+
+  get_value
+
+  update_placed_at
+
+  update_shelf
+
+  update_shelf_life
+
+  discard order
+
+  """
+
   use GenServer
 
   alias OS.Utils
@@ -8,9 +22,18 @@ defmodule OS.Order do
   end
 
   @impl true
-  def init([order: %{value: value}]=state) do
+  def init([order: order]=state) do
+    # cal value
+    state = state
+            |> Map.put(
+              :value,
+              Utils.calculate_order_value(order)
+            )
+
     state |> IO.inspect()
-    check_value()
+
+    unless state |> Keyword.get(:skip_check_value), do: check_value()
+
     {:ok, state}
   end
 
@@ -20,7 +43,7 @@ defmodule OS.Order do
   exit order process
   """
   @impl true
-  def handle_info(:check_value, [order: %{value: value}]=state) when value < 3 do
+  def handle_info(:check_value, [order: %{value: value}]=state) when value <= 0 do
     {:normal, "order is wasted", state}
   end
   
@@ -28,10 +51,15 @@ defmodule OS.Order do
   def handle_info(:check_value, [order: %{value: value}=order]=state) do
     IO.puts("Check order value:")
     Utils.get_time |> IO.inspect()
-    state |> IO.inspect()
+    state |> IO.inspect(label: "current state")
+
     state = state
     |> Keyword.put(:order, order |> 
-      Map.put(:value, value - 2)
+      Map.put(
+        :value,
+        # order |> Utils.calculate_order_value()
+        0
+      )
     )
 
     check_value()
