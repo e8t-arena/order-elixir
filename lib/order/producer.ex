@@ -7,16 +7,26 @@ defmodule  OS.OrderProducer do
   end
 
   def run([order_file_path: order_file_path]) do
+    order_rate = Utils.fetch_conf(:order_rate)
+    order_interval = Utils.fetch_conf(:order_interval)
     with {:ok, orders} <- Utils.load_orders(order_file_path) do
-      orders |> produce
+      orders
+      |> Enum.chunk_every(order_rate * order_interval) 
+      |> produce(order_interval)
     end
   end
   
-  def produce([]), do: Logger.info("End of Orders")
-  def produce([head | tail]) do
-    head = head |> Map.put(:produced_at, Utils.get_time)
-    Logger.info(event: "order received", order: head)
-    Utils.sleep(2)
-    produce(tail)
+  def produce([], _), do: Logger.info("End of Orders")
+  def produce([head | tail], order_interval) do
+    head = head |> Enum.map(fn item -> item |> Map.put(:produced_at, Utils.get_time) end)
+    Logger.info(event: "produce order", order: head)
+    if order_interval == 0 do
+      head
+    else
+      # place orders
+      head |> OS.ShelfManager.place_order
+      Utils.sleep(order_interval)
+      produce(tail, order_interval)
+    end
   end
 end

@@ -11,28 +11,23 @@ defmodule OS.ShelfSupervisor do
 
   alias OS.{Utils}
 
-  @shelves [
-    ["Hot", 10],
-    ["Cold", 10],
-    ["Frozen", 10],
-    ["Overflow", 15]
-  ]
+  @shelves Utils.fetch_conf(:shelves)
 
-  def start_link(init_arg) do
-    Supervisor.start_link(__MODULE__, init_arg, name: __MODULE__)
+  def start_link(opts) do
+    Supervisor.start_link(__MODULE__, :ok, opts)
   end
 
   @impl true
-  def init(_init_arg) do
-    init_children ++ [
+  def init(:ok) do
+    init_children(OS.Shelf) ++ [
       {OS.ShelfManager, []}
     ]
     |> Supervisor.init(strategy: :one_for_one)
   end
 
   def init_children(mod) do
-    init_shelves |> Enum.map(fn %{name: name}=init -> 
-      {OS.Shelf, init: init, name: name}
+    init_shelves() |> Enum.map(fn %{name: name}=init -> 
+      {mod, init: init, name: name}
     end)
   end
 

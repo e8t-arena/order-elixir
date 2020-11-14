@@ -9,8 +9,7 @@ defmodule OS.Supervisor do
 
   @impl true
   def init(_init_arg) do
-    priv_path = Utils.get_app_name |> Application.app_dir("priv")
-    order_file_path = Path.join([priv_path, 'orders.json'])
+    order_file_path = [Utils.get_priv_path(), "orders.json"] |> Path.join()
     children = [
       # OS.Register
       # OS.OrderProducer
