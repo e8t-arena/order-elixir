@@ -4,15 +4,9 @@ defmodule OS do
   """
 
   @doc """
-  Hello world.
-
-  ## Examples
-
-      iex> OS.hello()
-      :world
-
+  Start Application
   """
-  def hello do
-    :world
+  def start(_type, _args) do
+    OS.Supervisor.start_link(name: OS.Supervisor)
   end
 end
