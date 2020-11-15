@@ -26,9 +26,9 @@ defmodule OS.Shelf do
   def start_link([init: init, name: name]) when name == @overflow do
     # support choosing randomly or choosing by value
     extra_map = %{
-      "hot": [],
-      "cold": [],
-      "frozen": []
+      "hot" => [],
+      "cold" => [],
+      "frozen" => []
     }
     Agent.start_link(fn -> init |> Map.merge(extra_map) end, name: name)
   end

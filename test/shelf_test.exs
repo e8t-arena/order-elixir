@@ -3,7 +3,7 @@ defmodule OS.ShelfTest do
   doctest OS.Shelf
 
   test "init shelves" do
-    hot_shelf = OS.ShelfSupervisor.init_shelves |> hd
+    hot_shelf = OS.ShelfManager.init_shelves |> hd
     assert hot_shelf == %{name: "HotShelf", orders: %{}, temperature: "Hot", capacity: 10}
   end
 end

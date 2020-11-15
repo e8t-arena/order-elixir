@@ -5,8 +5,9 @@ defmodule OS.ShelfManager do
   init_state
 
   %{
-    shelves_state: %{"hot":false}
-    orders: %{order_id:"hot"}
+    orders: %{order_id: pid},
+    hot: %{},
+    cold: frozen: overflow:
   }
 
   orders acts as a local process register.
@@ -24,16 +25,97 @@ defmodule OS.ShelfManager do
   alias OS.{Shelf, Utils}
 
   @overflow "OverflowShelf"
-  @shelf_tags for [tag, _] <- Utils.fetch_conf(:shelves), do: tag |> String.downcase()
+  @shelves Utils.fetch_conf(:shelves)
 
-  def start_link(state) do
-    GenServer.start_link(__MODULE__, state)
+  def start_link(_state) do
+    GenServer.start_link(__MODULE__, :ok)
   end
 
-  def place_order(orders) do
-    GenServer.cast(__MODULE__, {:place_order, orders})
+  def place_orders(orders) do
+    orders
+    |> Enum.map(&(GenServer.cast(__MODULE__, {:place_order, &1})))
   end
 
+  @impl true
+  def handle_cast({:place_order, order}, state) do
+    state = handle_place_order(order, state)
+    # fn %{temperature: tag}=order -> 
+    #   # place_order never failed
+    #   # update manager state
+    #   shelf_state = handle_place_order(order) |> Shelf.is_full()
+    #   update_shelf_state(tag |> String.downcase(), shelf_state)
+    #   # TODO: start order process
+    # end)
+    {:noreply, state}
+  end
+
+  def handle_place_order(%{"temp" => tag}=order, %{shelves: shelves, orders: orders}=state) do
+    # place order
+    state = with shelf_name <- Utils.get_shelf(tag),
+         %{"capacity" => capacity, orders: old_orders} = old_shelf <- shelves[shelf_name],
+         is_full <- capacity <= length(old_orders),
+         shelves <- handle_place_order(is_full, {order, shelves, shelf_name, old_shelf}) do
+      update_state(state, :shelves, shelves)
+    end
+    # handle_place_order()
+    # start order process
+    # update orders
+  end
+
+  @doc """
+  If matched shelf is not full.
+  """
+  def handle_place_order(false, {order, shelves, shelf_name, old_shelf}) do
+    with shelf_orders <- [order | old_shelf[:orders]],
+         # shelf <- %{old_shelf | orders: shelf_orders},
+         shelves <- %{shelves | shelf_name => shelf} do
+      shelves
+    end
+  end
+
+  def update_shelf_orders(shelf, shelf_name) when shelf_name == @overflow do
+    # update "Hot"
+
+  end
+
+  def update_shelf_orders(shelf, shelf_name), do: %{shelf | orders: shelf_orders}
+
+  @doc """
+  If matched shelf is full.
+
+  Check overflow shelf
+
+  If overflow shelf is not full
+
+  If overflow shelf is full
+
+  (move)
+
+  get_unfilled_shelves
+
+  get_match_orders_in_overflow_shelf
+
+  """
+  def handle_place_order(true, {order, shelves, shelf_name, _old_shelf}) do
+    with %{"capacity" => capacity, orders: old_orders} = old_shelf <- shelves[@overflow],
+         is_full <- capacity <= length(old_orders) do
+      if not is_full do
+        handle_place_order(is_full, {order, shelves, :overflow, old_shelf})
+      else
+        move_order()
+        # after move, overflow shelf is unfilled
+        is_full = false
+        handle_place_order(is_full, {order, shelves, @overflow, old_shelf})
+      end
+    end
+  end
+
+
+  @doc """
+  From Overflow shelf to Other unfilled shelf
+
+  return shelves, shelf
+  """
   def move_order do
   end
 
@@ -56,7 +138,8 @@ defmodule OS.ShelfManager do
   end
 
   @impl true
-  def init(state) do
+  def init(:ok) do
+    state = init_state()
     {:ok, state}
   end
 
@@ -107,12 +190,45 @@ defmodule OS.ShelfManager do
   end
 
   @impl true
-  def handle_call(:get_shelves, _from, %{orders: orders}) do
-    {:reply, orders |> Utils.format_shelves()}
+  def handle_call(:get_shelves, _from, state) do
+    {:reply, state}
   end
 
   @impl true
   def handle_call({:get_order, order_id}, _from, %{orders: orders}) do
     {:reply, orders[order_id]}
   end
+
+  def init_shelves do
+    init_keys = [:name, :orders, :temperature, :capacity]
+    for %{name: name} = shelf <- @shelves |> Enum.map(fn [temp, _]=shelf -> 
+        shelf = shelf 
+        |> Utils.add_elems(["#{temp}Shelf", []] |> Enum.reverse)
+        Enum.zip(init_keys, shelf) |> Map.new
+      end), into: %{} do
+        case name
+          _ -> {name, shelf}
+          @overflow -> 
+            extra_map = %{
+              "Hot" => [],
+              "Cold" => [],
+              "Frozen" => []
+            }
+        end
+    end
+  end
+
+  def init_state() do
+    %{
+      orders: %{},
+      shelves: init_shelves()
+    }
+  end
+
+  def get_unfilled_shelves(%{shelves: shelves}) do
+    for %{capacity: capacity, orders: orders, temperature: temp} <- shelves, capacity > length(orders) do temp
+    end
+  end
+
+  def update_state(state, key, value), do: %{state | key => value}
 end

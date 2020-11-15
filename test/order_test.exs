@@ -12,6 +12,6 @@ defmodule OS.OrderTest do
   end
 
   test "place order" do
-    Order.
+    # Order.
   end
 end
