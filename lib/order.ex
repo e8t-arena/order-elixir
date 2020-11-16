@@ -1,5 +1,22 @@
 defmodule OS.Order do
-  @module """
+  @moduledoc """
+
+  init_state
+    [order: order]
+
+    order
+
+    %{
+      :placed_at => 1605388603,
+      "decayRate" => 0.63,
+      "id" => "a8cfcb76-7f24-4420-a5ba-d46dd77bdffd",
+      "name" => "Banana Split",
+      "shelfLife" => 20,
+      "temp" => "frozen",
+      :pid => <PID>,
+      :shelf => "OverflowShelf",
+      :value => 1
+    }
 
   get_value
 
@@ -18,29 +35,64 @@ defmodule OS.Order do
   alias OS.Utils
 
   def start_link(arg) do
-    GenServer.start_link(__MODULE__, arg)
+    GenServer.start_link(__MODULE__, arg, name: __MODULE__)
   end
 
+  def update_placed_at(pid), do: GenServer.cast(pid, :update_placed_at)
+
+  def update_shelf(pid, shelf_name), do: GenServer.cast(pid, {:update_placed_at, shelf_name})
+
+  def update_shelf_life(pid, shelf_life), do: GenServer.cast(pid, {:update_shelf_life, shelf_life})
+
+  def discard_order(pid), do: GenServer.cast(pid, :discard)
+
+  def get_value(pid), do: GenServer.call(pid, :get_value)
+
   @impl true
-  def init([order: order]=state) do
+  def init(order) do
     # cal value
 
-    order = order |> Map.put(
-      :pid, self()
-    )
+    {skip, order} =  order |> Map.pop(:skip_check_value, false)
 
-    state = state |> Map.put(
-      :value,
-      Utils.calculate_order_value(order)
-    ) |> Map.put(
-      :order, order
-    )
+    state = with order <- update_order(order, :pid, self()),
+         order <- update_order(order, :placed_at, Utils.get_time()),
+         order <- update_order(
+           order, 
+           :value, 
+           Utils.calculate_order_value(order)) do
+      order
+    end
 
     state |> IO.inspect()
 
-    unless state |> Keyword.get(:skip_check_value), do: check_value()
+    unless skip, do: check_value()
 
     {:ok, state}
+  end
+
+  @impl true
+  def handle_cast(:update_placed_at, state) do
+    {:noreply, %{state | placed_at: Utils.get_time()}}
+  end
+
+  @impl true
+  def handle_cast({:update_shelf, shelf_name}, state) do
+    {:noreply, %{state | shelf: shelf_name}}
+  end
+
+  @impl true
+  def handle_cast({:update_shelf_life, shelf_life}, state) do
+    {:noreply, %{state | "shelfLife" => shelf_life}}
+  end
+
+  @impl true
+  def handle_cast(:discard, state) do
+    {:noreply, state}
+  end
+
+  @impl true
+  def handle_call(:get_value, _From, %{value: value}) do
+    {:reply, value}
   end
 
   @doc """
@@ -49,23 +101,20 @@ defmodule OS.Order do
   exit order process
   """
   @impl true
-  def handle_info(:check_value, [order: %{value: value}]=state) when value <= 0 do
-    {:normal, "order is wasted", state}
+  def handle_info(:check_value, %{value: value}=state) when value <= 0 do
+    {:normal, "order is wasted: #{value}", state}
   end
   
   @impl true
-  def handle_info(:check_value, [order: %{value: value}=order]=state) do
-    IO.puts("Check order value:")
+  def handle_info(:check_value, %{value: value}=order) do
+    IO.puts("Check order value: #{value}")
     Utils.get_time |> IO.inspect()
-    state |> IO.inspect(label: "current state")
-
-    state = state
-    |> Keyword.put(:order, order |> 
-      Map.put(
-        :value,
-        # order |> Utils.calculate_order_value()
-        0
-      )
+    order |> IO.inspect(label: "current state")
+    
+    state = update_order(
+      order, 
+      :value,
+      Utils.calculate_order_value(order)
     )
 
     check_value()
@@ -80,4 +129,6 @@ defmodule OS.Order do
   defp check_value() do
     Process.send_after(self(), :check_value, 3 * 1000)
   end
+
+  defp update_order(order, key, value), do: order |> Map.put(key, value)
 end

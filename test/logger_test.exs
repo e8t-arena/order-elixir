@@ -1,5 +1,5 @@
 defmodule OS.LoggerTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest OS.Utils
 
   alias OS.{Utils, Logger}

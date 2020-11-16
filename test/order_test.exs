@@ -1,5 +1,5 @@
 defmodule OS.OrderTest do
-  use ExUnit.Case
+  use ExUnit.Case, async: true
   doctest OS.Order
 
   alias OS.OrderProducer

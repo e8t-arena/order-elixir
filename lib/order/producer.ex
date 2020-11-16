@@ -1,7 +1,7 @@
 defmodule  OS.OrderProducer do
   use Task
 
-  alias OS.{Utils, Logger}
+  alias OS.{Utils, Logger, ShelfManager}
   alias OS.Utils.Constants.Event
 
   def start_link(arg) do
@@ -27,7 +27,7 @@ defmodule  OS.OrderProducer do
       head
     else
       # place orders
-      head |> OS.ShelfManager.place_order
+      head |> ShelfManager.place_orders
       Utils.sleep(order_interval)
       produce(tail, order_interval)
     end
