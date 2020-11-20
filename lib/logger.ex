@@ -1,7 +1,7 @@
 defmodule OS.Logger do
   require Logger
 
-  alias OS.{Order}
+  alias OS.{Order, ShelfManager}
 
   def info(:event, event) do
     Logger.info("Event: #{inspect(event)}")
@@ -12,7 +12,7 @@ defmodule OS.Logger do
   end
 
   def info(:shelves) do
-    ShelfManger.get_shelves()
+    ShelfManager.get_shelves()
   end
 
   def info(:event, event, :order, order) do

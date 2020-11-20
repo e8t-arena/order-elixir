@@ -27,7 +27,7 @@ defmodule  OS.OrderProducer do
       head
     else
       # place orders
-      head |> ShelfManager.place_orders
+      # head |> ShelfManager.place_orders
       Utils.sleep(order_interval)
       produce(tail, order_interval)
     end

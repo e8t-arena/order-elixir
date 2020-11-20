@@ -33,20 +33,29 @@ defmodule OS.Utils do
 
   def get_shelf(%{"temperature" => tag}), do: tag |> get_shelf()
 
+  def get_shelf(%{"temp" => tag}), do: tag |> get_shelf()
+
   def get_shelf(shelf_tag) when is_bitstring(shelf_tag), do: "#{shelf_tag |> String.capitalize}Shelf"
 
   def fetch_conf(key), do: Application.fetch_env!(get_app_name(), key)
 
-  def is_test(), do: Mix.env() == :test
+  def is_test?(), do: Mix.env() == :test
 
   def get_shelf_decay_modifier(shelf), do: if shelf == "overflow", do: 2, else: 1
+
+  def calculate_order_value(_, _, skip) when skip == true, do: 0 
+
+  def calculate_order_value(order, check_time, _) do
+    check_time = if is_nil(check_time), do: get_time(), else: check_time
+    calculate_order_value(order, check_time)
+  end
 
   def calculate_order_value(%{
     "shelfLife" => shelf_life, 
     "decayRate" => decay_rate,
     placed_at: placed_at,
     shelf: shelf
-  }, check_time \\ get_time()) do
+  }, check_time) do
     with order_age <- check_time - placed_at,
          shelf <- shelf |> String.downcase(),
          shelf_decay_modifier <- get_shelf_decay_modifier(shelf) do
@@ -54,6 +63,8 @@ defmodule OS.Utils do
       shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier
     end
   end
+
+  def calculate_order_value(order), do: calculate_order_value(order, get_time())
 
   @doc """
   Group orders by shelf 
@@ -65,4 +76,25 @@ defmodule OS.Utils do
       fn (id, {_, pid}) -> %{id: id, pid: pid} end
     )
   end
+
+  def get_order_pid_name(id), do: {OS.Order, id}
+
+  def get_order_pid(%{pid_name: pid_name}=order) when is_map(order), do: get_order_pid(pid_name)
+
+  def get_order_pid(%{"id" => id}=order) when is_map(order), do: id |> get_order_pid_name() |> get_order_pid()
+
+  def get_order_pid(pid_name), do: pid_name |> :global.whereis_name()
+
+  def is_order_alive?(%{pid_name: pid_name}=order) when is_map(order), do: is_order_alive?(pid_name) 
+
+  def is_order_alive?(%{"id" => id}=order) when is_map(order), do: id |> get_order_pid_name() |> is_order_alive?() 
+
+  def is_order_alive?(pid_name) do 
+    pid_name |> IO.inspect(label: "is_order_alive?")
+    case pid_name |> get_order_pid() do
+      :undefined -> false
+      pid -> Process.alive?(pid)
+    end
+  end
+
 end
