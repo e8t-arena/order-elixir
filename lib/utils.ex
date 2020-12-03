@@ -90,7 +90,6 @@ defmodule OS.Utils do
   def is_order_alive?(%{"id" => id}=order) when is_map(order), do: id |> get_order_pid_name() |> is_order_alive?() 
 
   def is_order_alive?(pid_name) do 
-    pid_name |> IO.inspect(label: "is_order_alive?")
     case pid_name |> get_order_pid() do
       :undefined -> false
       pid -> Process.alive?(pid)

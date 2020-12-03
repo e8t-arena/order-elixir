@@ -60,14 +60,17 @@ defmodule OS.Order do
 
     state = with order <- update_order(order, :pid_name, {:global, id}),
          order <- update_order(order, :placed_at, Utils.get_time()),
-         value <- Utils.calculate_order_value(order, check_time, skip),
-         order <- update_order(order, :value, value) do
+         value <- Utils.calculate_order_value(order, check_time, skip), order <- update_order(order, :value, value) do
       order
     end
 
     state # |> IO.inspect()
 
-    unless skip, do: check_value()
+    # unless skip, do: check_value(self())
+    order_pid = self()
+    unless skip, do: Task.async(fn -> 
+      check_loop(order_pid)
+    end)
 
     {:ok, state}
   end
@@ -90,6 +93,15 @@ defmodule OS.Order do
   end
 
   @impl true
+  def handle_cast(:update_value, %{value: value}=state) when value <= 0 do
+    state = %{state | value: 0}
+    IO.inspect("Terminate order pid")
+    Process.exit(self(), :exit)
+    # ShelfManager.discard_order(state)
+    {:noreply, state}
+  end
+
+  @impl true
   def handle_cast(:update_value, state) do
     IO.inspect("Order: #{state["id"]} Value: #{state[:value]}")
     state = update_order(
@@ -97,7 +109,6 @@ defmodule OS.Order do
       :value,
       Utils.calculate_order_value(state)
     )
-    check_value()
     {:noreply, state}
   end
 
@@ -125,30 +136,9 @@ defmodule OS.Order do
     {:reply, {0, state}, state}
   end
 
-  @doc """
-  Order is wasted.
-
-  exit order process
-  """
   @impl true
-  def handle_info(:check_value, %{value: value}=state) when value <= 0 do
-    # {:normal, "order is wasted: #{value}", state}
-    ShelfManager.discard_order(state)
-    {:noreply, state}
-  end
-  
-  @impl true
-  def handle_info(:check_value, %{value: value}=order) do
-    IO.puts("Check order value: #{value}")
-    Utils.get_time() |> IO.inspect()
-    order |> IO.inspect(label: "current state")
-    
-    state = update_order(
-      order, 
-      :value,
-      Utils.calculate_order_value(order)
-    )
-    check_value()
+  def handle_info(msg, state) do
+    IO.inspect("#{msg |> inspect()}, #{state|>inspect()} at #{Utils.get_time()}")
     {:noreply, state}
   end
 
@@ -157,16 +147,40 @@ defmodule OS.Order do
     {reason, state} |> IO.inspect()
   end
 
+  # used in test
   def check_value(pid), do: GenServer.call(pid, :check_value)
 
-  def check_value() do
+  def check_value(order_pid) do
     # Process.send_after(self(), :check_value, 1000)
+    IO.inspect("Run check value #{order_pid |> inspect()} #{Utils.get_time()}")
     Task.async(fn -> 
       receive do
       after 
-        1000 -> OS.Order.update_value(self() |> Utils.get_order_pid())
+        1000 -> 
+          OS.Order.update_value(order_pid)
+          check_value(order_pid)
       end
     end)
+  end
+
+  def check_loop(order_pid) do
+    if Process.alive?(order_pid) do
+      check_loop(order_pid, :alive)
+    else
+      check_loop(order_pid, :exit)
+    end
+  end
+
+  def check_loop(order_pid, :exit), do: :ok
+
+  def check_loop(order_pid, :alive) do
+    IO.inspect("Run check value #{order_pid |> inspect()} #{Utils.get_time()}")
+    receive do
+    after
+      1000 -> 
+        OS.Order.update_value(order_pid)
+        check_loop(order_pid)
+    end
   end
 
   defp update_order(order, key, value), do: order |> Map.put(key, value)

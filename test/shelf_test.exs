@@ -220,7 +220,9 @@ defmodule OS.ShelfTest do
 
     delivered_order = cold_orders |> hd()
     assert Utils.is_order_alive?(delivered_order) == true
-    order = ShelfManager.dispatch_courier(delivered_order) |> IO.inspect(label: "after deliver order")
+    order = ShelfManager.dispatch_courier(delivered_order, true) |> IO.inspect(label: "after deliver order")
+    IO.inspect(Utils.get_order_pid(order))
+    Utils.sleep(2)
     assert is_nil(order) == false
     assert Utils.is_order_alive?(order) == false
   end

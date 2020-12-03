@@ -50,7 +50,7 @@ defmodule OS.ShelfManager do
   end
 
   def pickup_order(id) do
-    GenServer.call(__MODULE__, {:pickup_order, id})
+    GenServer.cast(__MODULE__, {:pickup_order, id})
   end
 
   @doc """
@@ -94,7 +94,7 @@ defmodule OS.ShelfManager do
     |> List.foldl(state, fn order, acc -> 
       {new_state, order} = handle_place_order(order, acc)
       # dispatch courier
-      dispatch_courier(order, Utils.is_test?())
+      dispatch_courier(order, not Utils.is_test?())
       new_state
     end)
     {:noreply, state}
@@ -118,15 +118,15 @@ defmodule OS.ShelfManager do
   end
 
   @impl true
-  def handle_call({:pickup_order, %{"id" => id, pid_name: pid_name}}, _from, %{orders: orders, shelves: shelves}) do
+  def handle_cast({:pickup_order, %{"id" => id, pid_name: pid_name}}, %{orders: orders, shelves: shelves}) do
     {removed_order, orders, shelves} = handle_pickup_order(id, pid_name, orders, shelves)
-    {:reply, removed_order, %{orders: orders, shelves: shelves}}
+    {:noreply, %{orders: orders, shelves: shelves}}
   end
 
   @impl true
-  def handle_call({:pickup_order, %{"id" => id}}, _from, %{orders: orders, shelves: shelves}) do 
+  def handle_cast({:pickup_order, %{"id" => id}}, %{orders: orders, shelves: shelves}) do 
     {removed_order, orders, shelves} = handle_pickup_order(id, orders, shelves)
-    {:reply, removed_order, %{orders: orders, shelves: shelves}}
+    {:noreply, %{orders: orders, shelves: shelves}}
   end
 
   @impl true
@@ -396,15 +396,20 @@ defmodule OS.ShelfManager do
   end
 
   def dispatch_courier(order, run_task \\ true)
-  def dispatch_courier(order, run_task) do
-    case Task.Supervisor.async(OS.Courier, OS.Courier, :run, [order]) |> Task.await() do
-      nil -> 
-        Logger.info("not found order")
-        nil
-      order -> 
-        Logger.info("Deliver order #{order |> inspect()}")
-        order
+
+  def dispatch_courier(order, true) do
+    Logger.info("Deliver order #{order |> inspect()}")
+    # Task.Supervisor.start_child(OS.Courier, OS.Courier, :run, [order])
+    # Task.async(fn -> 
+    # end)
+    delay = if Utils.is_test?(), do: 0.1, else: 2..6 |> Enum.random()
+    receive do
+    after
+      delay * 10000 ->
+        # ShelfManager.pickup_order(order)
+        IO.inspect(delay)
     end
+    order
   end
 
   def dispatch_courier(order, false), do: nil
