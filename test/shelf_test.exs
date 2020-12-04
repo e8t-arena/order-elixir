@@ -5,9 +5,9 @@ defmodule OS.ShelfTest do
   alias OS.{Utils, ShelfManager, Order}
 
   @overflow "overflow" |> Utils.get_shelf()
-  @hot "hot" |> Utils.get_shelf()
+  # @hot "hot" |> Utils.get_shelf()
   @frozen "frozen" |> Utils.get_shelf()
-  @cold "cold" |> Utils.get_shelf()
+  # @cold "cold" |> Utils.get_shelf()
 
   def place_cold_order_on_overflow(orders) do
     cold_orders = orders |> Enum.filter(&(&1["temp"] == "cold"))
@@ -174,11 +174,12 @@ defmodule OS.ShelfTest do
     %{pid_name: pid_name} = ShelfManager.get_order(order_id)
     assert pid_name |> Utils.is_order_alive?() == true
 
-    order = ShelfManager.get_order(order_id)
+    ShelfManager.get_order(order_id)
 
     # discard order
-    ShelfManager.discard_order(order)
-
+    # ShelfManager.discard_order(order)
+    Order.update_value(pid_name |> Utils.get_order_pid(), 0)
+    Utils.sleep(0.1)
     orders = ShelfManager.get_orders()
     assert orders |> Map.has_key?(order_id) == false
     assert pid_name |> Utils.is_order_alive?() == false
@@ -220,10 +221,20 @@ defmodule OS.ShelfTest do
 
     delivered_order = cold_orders |> hd()
     assert Utils.is_order_alive?(delivered_order) == true
-    order = ShelfManager.dispatch_courier(delivered_order, true) |> IO.inspect(label: "after deliver order")
-    IO.inspect(Utils.get_order_pid(order))
+    order = ShelfManager.dispatch_courier(delivered_order, true)
     Utils.sleep(2)
     assert is_nil(order) == false
     assert Utils.is_order_alive?(order) == false
   end
+
+  test "update producer state" do
+    state = ShelfManager.get_producer_state()
+    assert state == :running
+
+    ShelfManager.update_producer_state()
+
+    state = ShelfManager.get_producer_state()
+    assert state == :done
+  end
+
 end

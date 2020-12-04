@@ -7,13 +7,9 @@ defmodule OS.Logger do
     Logger.info("Event: #{inspect(event)}")
   end
 
-  def info(:order, order) do
-    Logger.info("Order: #{format(:order, order)}")
+  def info(:order, order) do Logger.info("Order: #{format(:order, order)}")
   end
 
-  def info(:shelves) do
-    ShelfManager.get_shelves()
-  end
 
   def info(:event, event, :order, order) do
     info(:event, event)
@@ -25,11 +21,15 @@ defmodule OS.Logger do
     info(:shelves)
   end
 
+  def info(:shelves) do
+    ShelfManager.get_shelves()
+  end
+
   def info(message), do: Logger.info(message)
 
   def format(:order, order) do
     # TODO order_id
-    # "#{inspect(order)}, value: #{Order.get_value()}"
+    "#{inspect(order)}, value: #{Order}"
     "order"
   end
 

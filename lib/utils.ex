@@ -22,7 +22,7 @@ defmodule OS.Utils do
     |> load_orders()
   end
 
-  def sleep(seconds \\ 0), do: :timer.sleep(seconds * 1000)
+  def sleep(seconds \\ 0), do: :timer.sleep(seconds * 1000 |> trunc())
 
   def get_time(), do: DateTime.utc_now |> DateTime.to_unix
 
@@ -96,4 +96,11 @@ defmodule OS.Utils do
     end
   end
 
+  def is_pid_alive?(nil), do: false
+
+  def is_pid_alive?(pid) when is_pid(pid), do: Process.alive?(pid)
+
+  def is_pid_alive?(pid), do: pid |> Process.whereis() |> is_pid_alive?()
+
+  def stop_app(), do: Application.stop(@app_name)
 end

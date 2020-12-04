@@ -23,7 +23,7 @@ defmodule OS.OrderTest do
          order <- order 
                   |> Map.put(:shelf, Utils.get_shelf(order))
                   |> Map.put(:check_time, Utils.get_time() + 10) do
-      %{pid_name: pid_name} = ShelfManager.handle_order_process(order)
+      %{pid_name: pid_name} = ShelfManager.handle_start_order(order)
       assert pid_name |> Utils.is_order_alive?() == true
       assert Order.get_value(pid_name |> Utils.get_order_pid()) == 3.7
     end

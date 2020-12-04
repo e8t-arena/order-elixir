@@ -5,6 +5,7 @@ defmodule OS.ShelfManager do
   init_state
 
   %{
+    producer_state: :running,
     orders: %{order_id: %{pid_name: {}, value: value}},
     shelves: %{
       "HotShelf": %{
@@ -44,8 +45,6 @@ defmodule OS.ShelfManager do
   end
 
   def place_orders(orders) do
-    # orders
-    # |> Enum.map(&(GenServer.cast(__MODULE__, {:place_order, &1})))
     GenServer.cast(__MODULE__, {:place_orders, orders})
   end
 
@@ -64,6 +63,8 @@ defmodule OS.ShelfManager do
     GenServer.cast(__MODULE__, {:discard_order, order})
   end
 
+  def update_producer_state(), do: GenServer.cast(__MODULE__, :update_producer_state)
+
   def update_shelf_state(tag, state) do
     GenServer.cast(__MODULE__, {:update_shelf_state, tag, state})
   end
@@ -80,6 +81,8 @@ defmodule OS.ShelfManager do
 
   def get_order_value(orders, id), do: get_order(orders, id)[:value]
 
+  def get_producer_state(), do: GenServer.call(__MODULE__, :get_producer_state)
+
   @impl true
   def init(:ok) do
     state = init_state()
@@ -88,8 +91,6 @@ defmodule OS.ShelfManager do
 
   @impl true
   def handle_cast({:place_orders, orders}, state) do
-    # state = handle_place_order(order, state)
-    orders|>IO.inspect()
     state = orders
     |> List.foldl(state, fn order, acc -> 
       {new_state, order} = handle_place_order(order, acc)
@@ -107,26 +108,31 @@ defmodule OS.ShelfManager do
   end
 
   @impl true
-  def handle_cast({:discard_order, %{shelf: shelf_name}=order}, %{orders: orders, shelves: shelves}) do
+  def handle_cast({:discard_order, %{shelf: shelf_name}=order}, %{orders: orders, shelves: shelves}=state) do
     # Call OrderSupervisor to stop Order process (in handle_place_order_orders)
     with shelf <- shelves |> Map.get(shelf_name),
          shelf <- remove_shelf_order(shelf, order) do
       shelves = %{shelves | shelf_name => shelf}
       orders = handle_place_order_orders(order, orders, :discard)
-      {:noreply, %{orders: orders, shelves: shelves}}
+      {:noreply, %{state | orders: orders, shelves: shelves}}
     end
   end
 
   @impl true
   def handle_cast({:pickup_order, %{"id" => id, pid_name: pid_name}}, %{orders: orders, shelves: shelves}) do
-    {removed_order, orders, shelves} = handle_pickup_order(id, pid_name, orders, shelves)
+    {_removed_order, orders, shelves} = handle_pickup_order(id, pid_name, orders, shelves)
     {:noreply, %{orders: orders, shelves: shelves}}
   end
 
   @impl true
   def handle_cast({:pickup_order, %{"id" => id}}, %{orders: orders, shelves: shelves}) do 
-    {removed_order, orders, shelves} = handle_pickup_order(id, orders, shelves)
+    {_removed_order, orders, shelves} = handle_pickup_order(id, orders, shelves)
     {:noreply, %{orders: orders, shelves: shelves}}
+  end
+
+  @impl true
+  def handle_cast(:update_producer_state, state) do
+    {:noreply, %{ state | producer_state: :done}}
   end
 
   @impl true
@@ -149,6 +155,11 @@ defmodule OS.ShelfManager do
     {:reply, shelves[shelf_name], state}
   end
 
+  @impl true
+  def handle_call(:get_producer_state, _from, %{producer_state: producer_state}=state) do
+    {:reply, producer_state, state}
+  end
+
   # Helpers
 
   def handle_place_order_shelves(tag, order, shelves, orders) do
@@ -161,12 +172,8 @@ defmodule OS.ShelfManager do
 
   def handle_place_order_orders(%{"id" => id, pid_name: pid_name}, orders, :discard) do 
     # stop order process
-    case Utils.get_order_pid(pid_name) do
-      :undefined -> orders
-      pid -> 
-        DynamicSupervisor.terminate_child(OS.OrderSupervisor, pid)
-        Map.delete(orders, id)
-    end
+    terminate_order(pid_name)
+    Map.delete(orders, id)
   end
 
   def handle_place_order_orders(%{"id" => id}=order, orders, :update), do: orders |> Map.put(id, order)
@@ -181,35 +188,36 @@ defmodule OS.ShelfManager do
     end
     
     # shelves |> IO.inspect()
-    pid = Utils.get_order_pid(order)
+    # pid = Utils.get_order_pid(order)
     with state <- update_state(state, :shelves, shelves),
          order <- order |> Map.put(:shelf, shelf_name), 
     # start order process 
-         order <- handle_order_process(order, pid),
+         # order <- handle_start_order(order, pid),
+         order <- handle_start_order(order),
     # update orders of shelf manager
          orders <- handle_place_order_orders(order, orders, :update) do
       {update_state(state, :orders, orders), order}
     end
   end
 
-  @doc """
-  If matched shelf is not full.
-  """
+  #@doc """
+  #If matched shelf is not full.
+  #"""
   def handle_place_order(false, {order, _orders, shelves, shelf_name, old_shelf}) do
     shelf_order_ids =  [order["id"] | old_shelf[:orders]]
     {update_shelf_orders(old_shelf, shelf_order_ids, shelf_name, order, shelves), shelf_name}
   end
 
-  """
-  If matched shelf is full.
+  #@doc """
+  #If matched shelf is full.
 
-  Check overflow shelf
+  #Check overflow shelf
 
-    If overflow shelf is not full
+    #If overflow shelf is not full
 
-    If overflow shelf is full
+    #If overflow shelf is full
 
-  """
+  #"""
   def handle_place_order(true, {order, orders, shelves, _shelf_name, _old_shelf}) do
     with %{capacity: capacity, orders: old_orders} = old_shelf <- shelves[@overflow],
          is_full <- capacity <= length(old_orders) do
@@ -238,9 +246,9 @@ defmodule OS.ShelfManager do
     end
   end
 
-  """
-  Single Tempreture shelf is not full
-  """
+  #"""
+  #Single Tempreture shelf is not full
+  #"""
   def update_shelf_orders(shelf, shelf_order_ids, shelf_name, _, shelves) do
     shelf = %{shelf | orders: shelf_order_ids}
     %{shelves | shelf_name => shelf}
@@ -342,8 +350,8 @@ defmodule OS.ShelfManager do
   end
 
   def init_state() do
-    # TODO: use tuple instead of map (?)
     %{
+      producer_state: :running,
       orders: %{},
       shelves: init_shelves()
     }
@@ -365,12 +373,7 @@ defmodule OS.ShelfManager do
       %{shelves | shelf_name => shelf}
     end
     # stop order process
-    case Utils.get_order_pid(pid_name) do
-      :undefined -> 
-        Logger.warn("#{pid_name} not found")
-      pid -> 
-        DynamicSupervisor.terminate_child(OS.OrderSupervisor, pid)
-    end
+    terminate_order(pid_name)
     {removed_order, orders, shelves}
   end
 
@@ -379,7 +382,7 @@ defmodule OS.ShelfManager do
     handle_pickup_order(id, pid_name, orders, shelves)
   end
 
-  def handle_order_process(%{"id" => id}=order, :undefined) do
+  def handle_start_order(%{"id" => id}=order, :undefined) do
     spec = Supervisor.child_spec({Order, {order, id}}, id: id)
     case DynamicSupervisor.start_child(OS.OrderSupervisor, spec) do
       {:ok, _pid} ->
@@ -389,30 +392,30 @@ defmodule OS.ShelfManager do
     end
   end
 
-  def handle_order_process(%{shelf: shelf_name}=order, order_pid) do
+  def handle_start_order(%{shelf: shelf_name}=order, order_pid) do
     # update shelf_name in Order process
     Order.update_shelf(order_pid, shelf_name)
     order
   end
 
+  def handle_start_order(order), do: handle_start_order(order, :undefined)
+
   def dispatch_courier(order, run_task \\ true)
 
   def dispatch_courier(order, true) do
-    Logger.info("Deliver order #{order |> inspect()}")
-    # Task.Supervisor.start_child(OS.Courier, OS.Courier, :run, [order])
-    # Task.async(fn -> 
-    # end)
-    delay = if Utils.is_test?(), do: 0.1, else: 2..6 |> Enum.random()
-    receive do
-    after
-      delay * 10000 ->
-        # ShelfManager.pickup_order(order)
-        IO.inspect(delay)
-    end
+    Task.Supervisor.start_child(OS.Courier, OS.Courier, :run, [order])
+    # Logger.info("Deliver order #{order |> inspect()}")
     order
   end
 
-  def dispatch_courier(order, false), do: nil
+  def dispatch_courier(_order, false), do: nil
 
-  def terminate(_order_id), do: :ok
+  def terminate_order(pid_name) do
+    case Utils.get_order_pid(pid_name) do
+      :undefined -> 
+        Logger.warn("#{pid_name} not found")
+      pid -> 
+        DynamicSupervisor.terminate_child(OS.OrderSupervisor, pid)
+    end
+  end
 end

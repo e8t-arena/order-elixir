@@ -18,7 +18,9 @@ defmodule  OS.OrderProducer do
     end
   end
   
-  def produce([], _), do: Logger.info("End of Orders")
+  def produce([], _) do
+
+  end
 
   def produce([head | tail], order_interval) do
     # head = head |> Enum.map(fn item -> item |> Map.put(:produced_at, Utils.get_time) end)
