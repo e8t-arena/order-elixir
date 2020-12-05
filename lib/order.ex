@@ -50,7 +50,12 @@ defmodule OS.Order do
 
   def discard_order(pid), do: GenServer.cast(pid, :discard)
 
-  def get_value(pid), do: GenServer.call(pid, :get_value)
+  def get_value(pid) when is_pid(pid), do: GenServer.call(pid, :get_value)
+
+  def get_value(:undefined), do: :process_not_found
+
+  def get_value(id), do: id |> Utils.get_order_pid() |> get_value()
+
   def get_shelf_name(pid), do: GenServer.call(pid, :get_shelf_name)
 
   @impl true

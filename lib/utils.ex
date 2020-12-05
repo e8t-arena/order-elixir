@@ -65,7 +65,7 @@ defmodule OS.Utils do
          shelf <- shelf |> String.downcase(),
          shelf_decay_modifier <- get_shelf_decay_modifier(shelf) do
       # (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life 
-      shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier
+      (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life |> Float.round(4)
     end
   end
 
@@ -88,7 +88,9 @@ defmodule OS.Utils do
 
   def get_order_pid(%{"id" => id}=order) when is_map(order), do: id |> get_order_pid_name() |> get_order_pid()
 
-  def get_order_pid(pid_name), do: pid_name |> :global.whereis_name()
+  def get_order_pid(pid_name) when is_tuple(pid_name), do: pid_name |> :global.whereis_name()
+
+  def get_order_pid(id), do: id |> get_order_pid_name() |> get_order_pid()
 
   def is_order_alive?(%{pid_name: pid_name}=order) when is_map(order), do: is_order_alive?(pid_name) 
 

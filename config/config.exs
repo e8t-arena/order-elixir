@@ -11,4 +11,12 @@ config :orders_simulation,
     ["Overflow", 15]
   ]
 
+config :logger,
+  backends: [:console]
+
+config :logger, :console,
+  level: :info,
+  format: "\n##### $date $time $metadata[$level] $levelpad$message\n"
+  # metadata: :all
+
 import_config "#{config_env()}.exs"

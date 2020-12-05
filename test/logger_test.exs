@@ -1,5 +1,7 @@
 defmodule OS.LoggerTest do
   use ExUnit.Case, async: true
+  import ExUnit.CaptureLog
+
   doctest OS.Utils
 
   alias OS.{Utils, Logger}
@@ -12,6 +14,6 @@ defmodule OS.LoggerTest do
       |> elem(1)
       |> hd
     # start order process
-    assert Logger.format(:order, order) == "order"
+    assert capture_log(fn -> Logger.info(:order, order) end)  =~ "[Order]"
   end
 end

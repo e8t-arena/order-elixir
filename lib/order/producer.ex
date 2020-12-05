@@ -32,7 +32,7 @@ defmodule  OS.OrderProducer do
       :nil -> order_interval
       value -> value
     end
-    Logger.info(event, Event.produce_order())
+    Logger.info(:event, Event.produce_order())
     # place orders
     head |> ShelfManager.place_orders()
     Utils.sleep(duration)
