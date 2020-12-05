@@ -23,8 +23,10 @@ end
 defmodule OS.Utils.Constants.Event do
   use OS.Utils.ConstantsMacro 
   const :produce_order
+  const :receive_order
   const :place_order
   const :pickup_order 
   const :move_order
   const :discard_order
+  const :dispatch_courier
 end

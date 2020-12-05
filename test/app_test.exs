@@ -47,5 +47,7 @@ defmodule OS.ApplicationTest do
 
     pid_alive = OS.ShelfManager |> Utils.is_pid_alive?()
     assert pid_alive == false
+
+    catch_exit(:sys.get_state(self(), 1000))
   end
 end

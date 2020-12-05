@@ -1,6 +1,7 @@
 defmodule OS.Utils do
 
-  # @order_file_path Config or
+  alias OS.Logger
+
   @app_name Mix.Project.config()[:app]
 
   def get_app_name, do: @app_name
@@ -12,7 +13,9 @@ defmodule OS.Utils do
       {:ok, json} <- Jason.decode(binary) do
       {:ok, json}
     else
-      {:error, reason} -> {:error, reason}
+      {:error, reason} ->
+        Logger.warn(reason)
+        {:ok, []}
     end
   end
 
@@ -30,6 +33,8 @@ defmodule OS.Utils do
   def add_elems(list, [head | tail]) do
     add_elems([head | list], tail)
   end
+
+  def get_shelf(%{shelf: shelf_name}), do: shelf_name
 
   def get_shelf(%{"temperature" => tag}), do: tag |> get_shelf()
 
@@ -64,8 +69,8 @@ defmodule OS.Utils do
     with order_age <- check_time - placed_at,
          shelf <- shelf |> String.downcase(),
          shelf_decay_modifier <- get_shelf_decay_modifier(shelf) do
-      # (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life 
-      (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life |> Float.round(4)
+      (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life 
+      # (shelf_life - order_age - decay_rate * order_age * shelf_decay_modifier) / shelf_life |> Float.round(4)
     end
   end
 
@@ -109,5 +114,14 @@ defmodule OS.Utils do
 
   def is_pid_alive?(pid), do: pid |> Process.whereis() |> is_pid_alive?()
 
-  def stop_app(), do: Application.stop(@app_name)
+  def stop_app() do
+    # Application.stop(@app_name)
+    System.stop(0)
+  end
+
+  def format_value(value) when is_float(value), do: value |> Float.round(4)
+
+  def format_value(value) when is_integer(value), do: value
+
+  def format_value(_value), do: format_value(0)
 end

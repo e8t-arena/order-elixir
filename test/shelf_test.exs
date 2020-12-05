@@ -58,9 +58,10 @@ defmodule OS.ShelfTest do
     # fill in cold shelf
     cold_orders = orders |> Enum.filter(&(&1["temp"] == "cold"))
     [cold_order | rest] = cold_orders
+    [cold_order1 | rest] = rest
     ShelfManager.place_orders(rest |> Enum.take(2))
 
-    # fill in overflow shelf
+    # fill in frozen shelf and overflow shelf
     frozen_orders = orders |> Enum.filter(&(&1["temp"] == "frozen")) |> Enum.take(5)
     ShelfManager.place_orders(frozen_orders)
 
@@ -82,6 +83,7 @@ defmodule OS.ShelfTest do
       assert not not_full
     end
 
+    # pick up from frozen shelf
     # after picking up frozen order, move order from overflow to frozen is possible, shelf in order map will change
     pickedup_order = frozen_orders |> hd
     ShelfManager.pickup_order(pickedup_order)
@@ -100,7 +102,12 @@ defmodule OS.ShelfTest do
     end
 
     # place cold order
-    ShelfManager.place_orders([cold_order])
+    # sleep 1000
+    {reason, _} = catch_exit(:sys.get_state(self(), 1000))
+    assert reason == :timeout
+    ShelfManager.place_orders([cold_order, cold_order1])
+
+    # moved order's shelf name: overflow -> frozen
      
     frozen_shelf = ShelfManager.get_shelf(@frozen)
     fronzen_ids = frozen_shelf[:orders]
@@ -108,24 +115,34 @@ defmodule OS.ShelfTest do
     assert common_ids |> Enum.count() == 1
 
     moved_id = common_ids |> hd()
-    %{shelf: old_shelf_name} = orders |> Map.get(moved_id)
+    %{:shelf => old_shelf_name, "shelfLife" => old_shelf_life} = orders |> Map.get(moved_id)
 
     orders = ShelfManager.get_orders()
-    %{shelf: shelf_new_shelf_name, pid_name: pid_name} = orders |> Map.get(moved_id)
-    assert old_shelf_name == shelf_new_shelf_name
+    %{:shelf => order_new_shelf_name, :pid_name => pid_name, "shelfLife" => order_new_shelf_life} = orders |> Map.get(moved_id)
+    assert old_shelf_name != order_new_shelf_name
+    assert old_shelf_life != order_new_shelf_life
 
-    order_new_shelf_name = Order.get_shelf_name(pid_name |> Utils.get_order_pid())
-    assert old_shelf_name == order_new_shelf_name
-    assert order_new_shelf_name == shelf_new_shelf_name
+    order_process_shelf_name = Order.get_shelf_name(pid_name |> Utils.get_order_pid())
+    order_process_shelf_life = Order.get_shelf_life(pid_name |> Utils.get_order_pid())
+    assert old_shelf_name != order_process_shelf_name
+    assert old_shelf_life != order_process_shelf_life
+
+    assert order_new_shelf_name == order_process_shelf_name
+    assert order_new_shelf_life == order_process_shelf_life
 
     overflow_shelf = ShelfManager.get_shelf(@overflow)
-    assert overflow_shelf["Cold"] |> hd == cold_order["id"]
+    assert overflow_shelf["Frozen"] |> Enum.count() < 3
+    assert overflow_shelf["Cold"] |> Enum.count() > 0
+    assert overflow_shelf[:orders] |> Enum.count() == 3
+
+    assert overflow_shelf[:orders] |> Enum.count() == 3
   end
 
   test "place order: when matched shelf and overflow shelf are full, and move is impossible", %{orders: orders} do
     # fill in cold shelf
     cold_orders = orders |> Enum.filter(&(&1["temp"] == "cold"))
     [order | rest] = cold_orders
+    [order1 | rest] = rest
     ShelfManager.place_orders(rest |> Enum.take(2))
 
     # fill in overflow shelf
@@ -154,7 +171,7 @@ defmodule OS.ShelfTest do
     end
 
     # place cold order
-    ShelfManager.place_orders([order])
+    ShelfManager.place_orders([order, order1])
      
     shelf = ShelfManager.get_shelf(@frozen)
     with count <- shelf[:orders] 
@@ -162,15 +179,20 @@ defmodule OS.ShelfTest do
       |> Enum.count() do 
       assert count == 0
     end
+
+    {reason, _} = catch_exit(:sys.get_state(self(), 500))
+    assert reason == :timeout
+
     shelf = ShelfManager.get_shelf(@overflow)
-    assert shelf["Cold"] |> hd == order["id"]
-    ShelfManager.get_orders()
+    assert shelf["Frozen"] |> Enum.count() < 3
+    assert shelf["Cold"] |> Enum.count() > 0
+    assert shelf[:orders] |> Enum.count() == 3
   end
 
   test "discard order: order value is equal to zero", %{orders: orders} do
     ShelfManager.place_orders(orders |> Enum.take(2))
 
-    %{"id" => order_id} = orders |> hd
+    %{"id" => order_id} = orders |> hd()
     %{pid_name: pid_name} = ShelfManager.get_order(order_id)
     assert pid_name |> Utils.is_order_alive?() == true
 
@@ -180,6 +202,7 @@ defmodule OS.ShelfTest do
     # ShelfManager.discard_order(order)
     Order.update_value(pid_name |> Utils.get_order_pid(), 0)
     Utils.sleep(0.1)
+
     orders = ShelfManager.get_orders()
     assert orders |> Map.has_key?(order_id) == false
     assert pid_name |> Utils.is_order_alive?() == false
@@ -235,5 +258,30 @@ defmodule OS.ShelfTest do
 
     state = ShelfManager.get_producer_state()
     assert state == :done
+  end
+
+  test "format shelves" do
+    shelves = %{
+      "ColdShelf" => %{
+        capacity: 2,
+        name: "ColdShelf",
+        orders: ["c18e1242-0856-4203-a98c-7066ead3bd6b",
+         "690b85f7-8c7d-4337-bd02-04e04454c826"],
+        temperature: "Cold"
+      },
+      "FrozenShelf" => %{
+        capacity: 2,
+        name: "FrozenShelf",
+        orders: ["7a5ea4ed-e378-4354-8ab3-a09cf563f621",
+         "58e9b5fe-3fde-4a27-8e98-682e58a4a65d"],
+        temperature: "Frozen"
+      }
+    }
+    orders = shelves |> Map.get("ColdShelf") |> Map.get(:orders)
+    order = orders |> hd()
+    assert ShelfManager.format_order(order, nil) |> String.contains?("value")
+    assert ShelfManager.format_orders(orders, nil) |> String.contains?("[Orders]")
+    OS.Logger.info ShelfManager.format_shelves(%{shelves: shelves}), :show
+    assert ShelfManager.format_shelves(%{shelves: shelves}) |> String.contains?("Shelf")
   end
 end

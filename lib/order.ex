@@ -1,8 +1,7 @@
 defmodule OS.Order do
   @moduledoc """
 
-  init_state
-    [order: order]
+  init_state [order: order]
 
     order
 
@@ -22,7 +21,7 @@ defmodule OS.Order do
 
   update_placed_at
 
-  update_shelf
+  update_shelf_name
 
   update_shelf_life
 
@@ -40,7 +39,7 @@ defmodule OS.Order do
 
   def update_placed_at(pid), do: GenServer.cast(pid, :update_placed_at)
 
-  def update_shelf(pid, shelf_name), do: GenServer.cast(pid, {:update_placed_at, shelf_name})
+  def update_shelf_name(pid, shelf_name), do: GenServer.cast(pid, {:update_shelf_name, shelf_name})
 
   def update_shelf_life(pid, shelf_life), do: GenServer.cast(pid, {:update_shelf_life, shelf_life})
 
@@ -52,11 +51,15 @@ defmodule OS.Order do
 
   def get_value(pid) when is_pid(pid), do: GenServer.call(pid, :get_value)
 
-  def get_value(:undefined), do: :process_not_found
+  def get_value(:undefined), do: -1000
 
   def get_value(id), do: id |> Utils.get_order_pid() |> get_value()
 
   def get_shelf_name(pid), do: GenServer.call(pid, :get_shelf_name)
+
+  def get_shelf_life(pid), do: GenServer.call(pid, :get_shelf_life)
+
+  def get_placed_at(pid), do: GenServer.call(pid, :get_placed_at)
 
   @impl true
   def init(%{"id"=>id}=order) do
@@ -88,9 +91,11 @@ defmodule OS.Order do
   end
 
   @impl true
-  def handle_cast({:update_shelf, shelf_name}, %{value: value}=state) do
-    state = state |> Map.put(:shelf, shelf_name)
-                  |> Map.put("shelfLife", value)
+  def handle_cast({:update_shelf_name, shelf_name}, %{:value => value, "shelfLife" => shelf_life}=state) do
+    state = state 
+            |> Map.put(:shelf, shelf_name)
+            |> Map.put("shelfLife", value * shelf_life)
+            |> Map.put(:placed_at, Utils.get_time())
     {:noreply, state}
   end
 
@@ -115,16 +120,17 @@ defmodule OS.Order do
 
   @impl true
   def handle_cast(:update_value, %{value: value}=state) when value <= 0 do
+    # IO.inspect("Current #{self() |> inspect() } Order: #{state["id"]} Value: #{state[:value]}")
     state = %{state | value: 0}
-    # IO.inspect("Terminate order pid")
-    Process.exit(self(), :exit)
-    # ShelfManager.discard_order(state)
+    ShelfManager.discard_order(state)
     {:noreply, state}
   end
 
   @impl true
   def handle_cast(:update_value, state) do
-    # IO.inspect("Current #{self() |> inspect() } Order: #{state["id"]} Value: #{state[:value]}")
+    if state[:value] < 0.2 do
+      # IO.inspect("Current #{self() |> inspect() } Order: #{state["id"]} Value: #{state[:value]}")
+    end
     state = update_order(
       state, 
       :value,
@@ -147,6 +153,16 @@ defmodule OS.Order do
   @impl true
   def handle_call(:get_shelf_name, _From, %{shelf: shelf_name}=state) do
     {:reply, shelf_name, state}
+  end
+
+  @impl true
+  def handle_call(:get_shelf_life, _From, %{"shelfLife" => shelf_life}=state) do
+    {:reply, shelf_life, state}
+  end
+
+  @impl true
+  def handle_call(:get_placed_at, _From, %{placed_at: placed_at}=state) do
+    {:reply, placed_at, state}
   end
 
   @impl true

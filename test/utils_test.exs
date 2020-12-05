@@ -15,7 +15,7 @@ defmodule OS.UtilsTest do
       |> hd
       |> Map.put(:placed_at, current_time)
     check_time = current_time + time_span
-    assert Utils.calculate_order_value(order |> Map.put(:shelf, order["temp"]), check_time) == 0.5925
+    assert Utils.calculate_order_value(order |> Map.put(:shelf, order["temp"]), check_time) |> Float.round(4) == 0.5925
   end
 
   test "fetch configuration" do

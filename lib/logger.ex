@@ -1,18 +1,28 @@
 defmodule OS.Logger do
   require Logger
 
-  alias OS.Order
+  alias OS.{Order, Utils}
 
-  def info(:event, msg) do
-    info("[Event] #{msg |> String.upcase()}")
-  end
-
-  def info(:shelves, msg) do
-    info("[Shelves] #{msg}")
+  def info(:event, event, reason) when is_atom(reason) do
+    info("\n[Event] #{event |> String.upcase()} reason: #{reason}", ansi_color: :yellow)
   end
 
   def info(:order, %{"id" => id}, value) do 
-    info(~s([Order]:\n  id: #{id}\n  value: #{value}))
+    info(~s(\n[Order]:\n  id: #{id}\n  value: #{value |> Utils.format_value()}), :show, [])
+  end
+
+  def info(message, :show, arg) do
+    Logger.info(message, arg)
+  end
+
+  def info(message, arg \\ [])
+
+  def info(:event, msg) do
+    info("\n[Event] #{msg |> String.upcase()}", ansi_color: :yellow)
+  end
+
+  def info(:shelves, msg) do
+    info("\n[Shelves] #{msg}")
   end
 
   def info(:order, %{"id" => id}=order) do 
@@ -20,48 +30,12 @@ defmodule OS.Logger do
     info(:order, order, order_value)
   end
 
-  def info(message), do: Logger.info(message)
+  def info(message, arg) do
+    unless Utils.is_test?() do
+      info(message, :show, arg)
+    end
+  end
   
-  # defdelegate
-  
-  def warn(message), do: Logger.warn(message)
-  def error(message), do: Logger.error(message)
-end
-
-defmodule OS.Logger1 do
-  require Logger
-
-  alias OS.{Order, ShelfManager}
-
-  def info(:event, event) do
-    Logger.info("[Event] #{event |> String.upcase()}")
-  end
-
-  def info(:order, order) do Logger.info("Order: #{format(:order, order)}")
-  end
-
-  def info(:event, event, :order, order) do
-    info(:event, event)
-    info(:order, order)
-  end
-
-  def info(:event, event, :shelves) do
-    info(:event, event)
-    info(:shelves)
-  end
-
-  def info(:shelves) do
-    ShelfManager.get_shelves()
-  end
-
-  def info(message), do: Logger.info(message)
-
-  def format(:order, order) do
-    # TODO order_id
-    "#{inspect(order)}, value: #{Order}"
-    "order"
-  end
-
   # defdelegate
   
   def warn(message), do: Logger.warn(message)

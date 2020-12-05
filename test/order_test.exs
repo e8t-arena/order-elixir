@@ -25,7 +25,7 @@ defmodule OS.OrderTest do
                   |> Map.put(:check_time, Utils.get_time() + 10) do
       %{pid_name: pid_name} = ShelfManager.handle_start_order(order)
       assert pid_name |> Utils.is_order_alive?() == true
-      assert Order.get_value(pid_name |> Utils.get_order_pid()) == 0.185
+      assert Order.get_value(pid_name |> Utils.get_order_pid()) |> Float.round(4) == 0.185
     end
   end
 
@@ -35,8 +35,8 @@ defmodule OS.OrderTest do
                   |> Map.put(:shelf, Utils.get_shelf(order))
                   |> Map.put(:check_time, Utils.get_time() + 10) do
       ShelfManager.handle_start_order(order)
-      assert Order.get_value(order["id"]) == 0.185
-      assert Order.get_value(:non_existent) == :process_not_found
+      assert Order.get_value(order["id"]) |> Float.round(4) == 0.185
+      assert Order.get_value(:non_existent) == -1000
     end
   end
 end

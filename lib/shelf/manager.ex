@@ -36,6 +36,7 @@ defmodule OS.ShelfManager do
 
   use GenServer
   alias OS.{Utils, Order, Logger}
+  alias OS.Utils.Constants.Event
 
   @overflow "OverflowShelf"
   @shelves Utils.fetch_conf(:shelves)
@@ -65,9 +66,9 @@ defmodule OS.ShelfManager do
 
   def update_producer_state(), do: GenServer.cast(__MODULE__, :update_producer_state)
 
-  def update_shelf_state(tag, state) do
-    GenServer.cast(__MODULE__, {:update_shelf_state, tag, state})
-  end
+  # def update_shelf_state(tag, state) do
+  #   GenServer.cast(__MODULE__, {:update_shelf_state, tag, state})
+  # end
 
   def get_shelves(), do: GenServer.call(__MODULE__, :get_shelves)
 
@@ -79,7 +80,7 @@ defmodule OS.ShelfManager do
 
   def get_order(id), do: GenServer.call(__MODULE__, {:get_order, id})
 
-  def get_order_value(orders, id), do: get_order(orders, id)[:value]
+  # def get_order_value(orders, id), do: get_order(orders, id)[:value]
 
   def get_producer_state(), do: GenServer.call(__MODULE__, :get_producer_state)
 
@@ -91,10 +92,13 @@ defmodule OS.ShelfManager do
 
   @impl true
   def handle_cast({:place_orders, orders}, state) do
+    log(Event.receive_order(), state)
     state = orders
     |> List.foldl(state, fn order, acc -> 
       {new_state, order} = handle_place_order(order, acc)
+      log(Event.place_order(), new_state)
       # dispatch courier
+      # log(Event.dispatch_courier(), new_state)
       dispatch_courier(order, not Utils.is_test?())
       new_state
     end)
@@ -108,12 +112,15 @@ defmodule OS.ShelfManager do
   end
 
   @impl true
-  def handle_cast({:discard_order, %{shelf: shelf_name}=order}, %{orders: orders, shelves: shelves}=state) do
+  def handle_cast({:discard_order, %{shelf: shelf_name}=order}, %{orders: orders, shelves: shelves, }=state) do
+    # %{placed_at: start_time} = orders |> Map.get(order["id"])
+    # Utils.get_time() - start_time |> IO.inspect(label: "discard_order duration:")
     # Call OrderSupervisor to stop Order process (in handle_place_order_orders)
     with shelf <- shelves |> Map.get(shelf_name),
          shelf <- remove_shelf_order(shelf, order) do
       shelves = %{shelves | shelf_name => shelf}
       orders = handle_place_order_orders(order, orders, :discard)
+      log(Event.discard_order(), %{orders: orders, shelves: shelves}, :order_value_equal_zero)
       try_to_stop_app(state, orders, shelves)
     end
   end
@@ -121,12 +128,14 @@ defmodule OS.ShelfManager do
   @impl true
   def handle_cast({:pickup_order, %{"id" => id, pid_name: pid_name}}, %{orders: orders, shelves: shelves}=state) do
     {_removed_order, orders, shelves} = handle_pickup_order(id, pid_name, orders, shelves)
+    log(Event.pickup_order(), %{orders: orders, shelves: shelves})
     try_to_stop_app(state, orders, shelves)
   end
 
   @impl true
   def handle_cast({:pickup_order, %{"id" => id}}, %{orders: orders, shelves: shelves}=state) do 
     {_removed_order, orders, shelves} = handle_pickup_order(id, orders, shelves)
+    log(Event.pickup_order(), %{orders: orders, shelves: shelves})
     try_to_stop_app(state, orders, shelves)
   end
 
@@ -171,6 +180,7 @@ defmodule OS.ShelfManager do
   end
 
   def handle_place_order_orders(%{"id" => id, pid_name: pid_name}, orders, :discard) do 
+    Logger.info(:event, Event.receive_order())
     # stop order process
     terminate_order(pid_name)
     Map.delete(orders, id)
@@ -180,19 +190,24 @@ defmodule OS.ShelfManager do
 
   def handle_place_order(%{"temp" => tag}=order, %{shelves: shelves, orders: orders}=state) do
     # place order
-    {state, shelves, shelf_name} = case handle_place_order_shelves(tag, order, shelves, orders) do
+    {%{orders: orders}=state, shelf_name} = case handle_place_order_shelves(tag, order, shelves, orders) do
       {shelves, shelf_name, updated_order, label} ->
+        updated_order = handle_start_order(updated_order)
         orders = handle_place_order_orders(updated_order, orders, label)
-        {update_state(state, :orders, orders), shelves, shelf_name}
-      {shelves, shelf_name} -> {state, shelves, shelf_name}
+        state = state 
+                |> update_state(:orders, orders)
+                |> update_state(:shelves, shelves)
+        log(state, label: label)
+        {state, shelf_name}
+      {shelves, shelf_name} -> 
+        state = state 
+                |> update_state(:shelves, shelves)
+        {state, shelf_name}
     end
     
     # shelves |> IO.inspect()
-    # pid = Utils.get_order_pid(order)
-    with state <- update_state(state, :shelves, shelves),
-         order <- order |> Map.put(:shelf, shelf_name), 
+    with order <- order |> Map.put(:shelf, shelf_name), 
     # start order process 
-         # order <- handle_start_order(order, pid),
          order <- handle_start_order(order),
     # update orders of shelf manager
          orders <- handle_place_order_orders(order, orders, :update) do
@@ -225,6 +240,7 @@ defmodule OS.ShelfManager do
         handle_place_order(is_full, {order, orders, shelves, @overflow, old_shelf})
       else
         {label, shelves, updated_order} = move_order(old_shelf, orders, shelves)
+        %{orders: orders} = old_shelf = shelves[@overflow]
         is_full = false
         # after move, overflow shelf is unfilled, place new order to overflow shelf
         {shelves, shelf_name} = handle_place_order(is_full, {order, orders, shelves, @overflow, old_shelf})
@@ -257,7 +273,7 @@ defmodule OS.ShelfManager do
   @doc """
   From Overflow shelf to Other unfilled shelf
 
-  return shelves, shelf
+  return label, shelves
   """
   def move_order(overflow_shelf, orders, shelves) do
     # [[],[]]
@@ -265,8 +281,8 @@ defmodule OS.ShelfManager do
       overflow_shelf[shelf_tag]
     end
     case order_ids |> List.flatten() do
-      # randomly discard order
       [] ->
+        # randomly discard order
         order_ids =  overflow_shelf[:orders]
         with order_id <- choose_order(:random, order_ids),
              order <- get_order(orders, order_id),
@@ -274,30 +290,31 @@ defmodule OS.ShelfManager do
              shelf <- remove_shelf_order(overflow_shelf, order) do
           {:discard, %{shelves | @overflow => shelf}, order}
         end
-      # select order
-      # remove order
-      # place order to single temperature shelf
       order_ids -> 
+        # select order
+        # remove order
+        # place order to single temperature shelf
         with order_id <- choose_order(:random, order_ids),
              order <- get_order(orders, order_id),
-             shelf_name <- Utils.get_shelf(order),
-             old_shelf <- shelves[shelf_name],
-             order <- %{order | shelf: shelf_name},
-             shelves <- %{ shelves | @overflow => remove_shelf_order(overflow_shelf, order) } do
+             new_shelf_name <- order |> Map.take(["temp"]) |> Utils.get_shelf(),
+             new_shelf <- shelves[new_shelf_name],
+             order <- %{order | shelf: new_shelf_name},
+             shelves <- %{ shelves | 
+               @overflow => remove_shelf_order(overflow_shelf, order)
+             } do
           # place moved_order
-          {shelves, _} = handle_place_order(false, {order, orders, shelves, shelf_name, old_shelf})
-          # TODO: update moved order process state
+          {shelves, _} = handle_place_order(false, {order, orders, shelves, new_shelf_name, new_shelf})
           {:update, shelves, order}
         end
     end
   end
 
   def remove_shelf_order(%{orders: order_ids, name: name}=shelf, %{"id" => id, "temp" => tag}) when name == @overflow do 
-    # remove order from 
+    # remove order 
     tag = tag |> String.capitalize()
     with temp_order_ids <- shelf[tag] do
-      # overflow_shelf temp orders
-      # oveflow_shelf orders 
+      # remove order from overflow_shelf temp orders
+      # remove order from overflow_shelf all orders 
       shelf |> Map.put(
         tag,
         remove_order_id(temp_order_ids, id)
@@ -318,7 +335,7 @@ defmodule OS.ShelfManager do
   def remove_order_id(order_ids, id), do: order_ids |> List.delete(id)
 
   @doc """
-  alternative orders
+  choose order
   """
   def choose_order(:random, ids), do: ids |> Enum.random()
 
@@ -364,7 +381,7 @@ defmodule OS.ShelfManager do
   def update_state(state, key, value), do: %{state | key => value}
 
   def handle_pickup_order(id, pid_name, orders, shelves) do
-    # remove from state order
+    # remove from state orders
     {%{^id => removed_order}, orders} = orders |> Map.split([id])
     # remove from state shelves
     shelves = with shelf_name <- removed_order[:shelf],
@@ -385,20 +402,31 @@ defmodule OS.ShelfManager do
   def handle_start_order(%{"id" => id}=order, :undefined) do
     spec = Supervisor.child_spec({Order, {order, id}}, id: id)
     case DynamicSupervisor.start_child(OS.OrderSupervisor, spec) do
-      {:ok, _pid} ->
-        order |> Map.put(:pid_name, {OS.Order, id})
+      {:ok, pid} ->
+        placed_at = Order.get_placed_at(pid)
+        order 
+        |> Map.put(:pid_name, {OS.Order, id})
+        |> Map.put(:placed_at, placed_at)
       {:error, reason} ->
-        reason
+        reason |> inspect() |> Logger.warn()
+        order
     end
   end
 
   def handle_start_order(%{shelf: shelf_name}=order, order_pid) do
     # update shelf_name in Order process
-    Order.update_shelf(order_pid, shelf_name)
-    order
+    Order.update_shelf_name(order_pid, shelf_name)
+    shelf_life = Order.get_shelf_life(order_pid)
+    # IO.inspect("#{order["shelfLife"]} -> #{shelf_life}")
+    order |> Map.put("shelfLife", shelf_life)
   end
 
-  def handle_start_order(order), do: handle_start_order(order, :undefined)
+  def handle_start_order(order) do
+    case order |> Utils.get_order_pid() do
+      :undefined -> handle_start_order(order, :undefined)
+      pid -> handle_start_order(order, pid)
+    end
+  end
 
   def dispatch_courier(order, run_task \\ true)
 
@@ -426,5 +454,62 @@ defmodule OS.ShelfManager do
       Utils.stop_app()
     end
     {:noreply, state}
+  end
+
+  def format_shelves(%{orders: orders,shelves: shelves}) do 
+    msg = for {shelf_name, %{orders: shelf_orders, capacity: cap}} <- shelves do
+      count = shelf_orders |> Enum.count()
+      is_full = cap <= count
+      ~s([Shelf] #{shelf_name}\n  cap: #{cap}, count: #{count}, is_full: #{is_full}\n  #{format_orders(shelf_orders, orders)})
+    end |> Enum.join("\n\n")
+    "\n\n" <> msg
+  end
+
+  def format_shelves(%{shelves: shelves}) do 
+    format_shelves(%{orders: nil,shelves: shelves})
+  end
+
+  def format_orders([]) do
+    ~s([Orders] empty)
+  end
+
+  def format_orders(orders, all_orders) do
+    ~s([Orders]\n    #{for order <- orders do
+      format_order(order, all_orders)
+    end |> Enum.join("\n    ")})
+  end
+
+  def format_order(order_id, nil) do
+    order_value = Order.get_value(order_id) |> Utils.format_value()
+    ~s(id: #{order_id}, value: #{order_value})
+  end
+
+  def format_order(order_id, all_orders) do
+    order_value = Order.get_value(order_id) |> Utils.format_value()
+    case all_orders |> Map.get(order_id) do
+      %{"temp" => temp} -> 
+        ~s(id: #{order_id}, temp: #{temp}, value: #{order_value})
+      _ ->
+        ~s(id: #{order_id}, value: #{order_value})
+    end
+  end
+
+  def log(event, state, reason) do
+    Logger.info(:event, event, reason)
+    Logger.info(:shelves, state |> format_shelves())
+  end
+
+  def log(state, label: label) do
+    case label do
+      :discard ->
+        log(Event.discard_order(), state, :place_order)
+      :update ->
+        log(Event.move_order(), state)
+    end
+  end
+
+  def log(event, state) do
+    Logger.info(:event, event)
+    Logger.info(:shelves, state |> format_shelves())
   end
 end

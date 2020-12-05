@@ -1,5 +1,5 @@
 defmodule OS.LoggerTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case
   import ExUnit.CaptureLog
 
   doctest OS.Utils
