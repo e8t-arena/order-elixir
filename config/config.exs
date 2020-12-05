@@ -3,6 +3,7 @@ import Config
 config :orders_simulation,
   order_rate: 2, # per second
   order_interval: 1, # seconds
+  order_count: :all,
   shelves: [
     ["Hot", 10],
     ["Cold", 10],

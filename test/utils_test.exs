@@ -17,4 +17,8 @@ defmodule OS.UtilsTest do
     check_time = current_time + time_span
     assert Utils.calculate_order_value(order |> Map.put(:shelf, order["temp"]), check_time) == 11.85
   end
+
+  test "fetch configuration" do
+    assert Utils.fetch_conf(:nonkey) |> is_nil() == true
+  end
 end

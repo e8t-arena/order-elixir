@@ -17,7 +17,6 @@ defmodule OS.Shelf do
   place_order: place order on selected shelf.
 
   pickup_order: courier deliver specific order.
-  """
 
   use Agent
 
@@ -70,4 +69,5 @@ defmodule OS.Shelf do
   def pickup_order(shelf, order) do
     Agent.update(shelf, &(pickup_order(&1, order)))
   end
+  """
 end

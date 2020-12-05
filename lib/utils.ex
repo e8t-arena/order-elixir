@@ -37,7 +37,12 @@ defmodule OS.Utils do
 
   def get_shelf(shelf_tag) when is_bitstring(shelf_tag), do: "#{shelf_tag |> String.capitalize}Shelf"
 
-  def fetch_conf(key), do: Application.fetch_env!(get_app_name(), key)
+  def fetch_conf(key) do 
+    case Application.fetch_env(get_app_name(), key) do
+      {:ok, value} -> value
+      :error -> nil
+    end
+  end
 
   def is_test?(), do: Mix.env() == :test
 

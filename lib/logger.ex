@@ -4,7 +4,7 @@ defmodule OS.Logger do
   alias OS.{Order, ShelfManager}
 
   def info(:event, event) do
-    Logger.info("Event: #{inspect(event)}")
+    Logger.info("[Event] #{inspect(event)}")
   end
 
   def info(:order, order) do Logger.info("Order: #{format(:order, order)}")

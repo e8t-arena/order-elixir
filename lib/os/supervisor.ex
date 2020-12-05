@@ -11,12 +11,13 @@ defmodule OS.Supervisor do
   def init(:ok) do
     order_file_path = [Utils.get_priv_path(), "orders.json"] |> Path.join()
     children = [
-      # start order supervisor
+      {Task.Supervisor, name: OS.Courier},
+
       {DynamicSupervisor, name: OS.OrderSupervisor, strategy: :one_for_one},
 
       OS.ShelfSupervisor,
 
-      # {OS.OrderProducer, order_file_path: order_file_path }
+      {OS.OrderProducer, order_file_path: order_file_path }
     ]
 
     Supervisor.init(children, strategy: :one_for_one)

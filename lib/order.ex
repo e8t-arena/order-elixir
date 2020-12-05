@@ -154,8 +154,7 @@ defmodule OS.Order do
 
   @impl true
   def handle_info(msg, state) do
-    # IO.inspect("#{msg |> inspect()}, #{state|>inspect()} at #{Utils.get_time()}")
-    msg
+    IO.inspect("#{msg |> inspect()}, #{state|>inspect()} at #{Utils.get_time()}")
     {:noreply, state}
   end
 

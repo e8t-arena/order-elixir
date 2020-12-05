@@ -114,20 +114,20 @@ defmodule OS.ShelfManager do
          shelf <- remove_shelf_order(shelf, order) do
       shelves = %{shelves | shelf_name => shelf}
       orders = handle_place_order_orders(order, orders, :discard)
-      {:noreply, %{state | orders: orders, shelves: shelves}}
+      try_to_stop_app(state, orders, shelves)
     end
   end
 
   @impl true
-  def handle_cast({:pickup_order, %{"id" => id, pid_name: pid_name}}, %{orders: orders, shelves: shelves}) do
+  def handle_cast({:pickup_order, %{"id" => id, pid_name: pid_name}}, %{orders: orders, shelves: shelves}=state) do
     {_removed_order, orders, shelves} = handle_pickup_order(id, pid_name, orders, shelves)
-    {:noreply, %{orders: orders, shelves: shelves}}
+    try_to_stop_app(state, orders, shelves)
   end
 
   @impl true
-  def handle_cast({:pickup_order, %{"id" => id}}, %{orders: orders, shelves: shelves}) do 
+  def handle_cast({:pickup_order, %{"id" => id}}, %{orders: orders, shelves: shelves}=state) do 
     {_removed_order, orders, shelves} = handle_pickup_order(id, orders, shelves)
-    {:noreply, %{orders: orders, shelves: shelves}}
+    try_to_stop_app(state, orders, shelves)
   end
 
   @impl true
@@ -417,5 +417,14 @@ defmodule OS.ShelfManager do
       pid -> 
         DynamicSupervisor.terminate_child(OS.OrderSupervisor, pid)
     end
+  end
+
+  def try_to_stop_app(%{producer_state: producer_state}=state, orders, shelves) do
+    state = %{state | orders: orders, shelves: shelves}
+    if producer_state == :done and orders == %{} do
+      Logger.info("System DOWN")
+      Utils.stop_app()
+    end
+    {:noreply, state}
   end
 end

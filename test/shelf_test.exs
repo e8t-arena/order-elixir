@@ -236,5 +236,4 @@ defmodule OS.ShelfTest do
     state = ShelfManager.get_producer_state()
     assert state == :done
   end
-
 end
