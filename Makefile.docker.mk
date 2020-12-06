@@ -1,7 +1,10 @@
-PREFIX=docker run --rm -it -v $(PWD):/app peterlau/elixir-dev
+PREFIX=docker run --rm -it -v $(PWD):/app schemerace/elixir-dev
+
+pull:
+	docker pull schemerace/elixir-dev
 
 build_image:
-	docker build . -t peterlau/elixir-dev
+	docker build . -t schemerace/elixir-dev
 
 boot:
 	$(PREFIX) mix deps.get
@@ -23,4 +26,7 @@ nodispatch:
 test:
 	$(PREFIX) mix test --no-start
 
+readme:
+	cat README.md 
+	
 .PHONY: all boot deps test clean

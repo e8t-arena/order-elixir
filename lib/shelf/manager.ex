@@ -80,7 +80,7 @@ defmodule OS.ShelfManager do
 
   def get_order(id), do: GenServer.call(__MODULE__, {:get_order, id})
 
-  # def get_order_value(orders, id), do: get_order(orders, id)[:value]
+  def get_order_value(id), do: Order.get_value(id)
 
   def get_producer_state(), do: GenServer.call(__MODULE__, :get_producer_state)
 
@@ -340,9 +340,8 @@ defmodule OS.ShelfManager do
   def choose_order(:random, ids), do: ids |> Enum.random()
 
   def choose_order(:lowest_value, ids) do
-    {_, shelf_orders} = GenServer.call(__MODULE__, :get_all_orders)
     ids
-    |> Enum.sort(&(get_order_value(shelf_orders, &1) < get_order_value(shelf_orders, &2)))
+    |> Enum.sort(&(get_order_value(&1) < get_order_value(&2)))
     |> hd
   end
 
