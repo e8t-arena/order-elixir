@@ -1,4 +1,4 @@
-# Orders Simulation Homework
+# Orders Simulation
 
 ## Setup Local Environment:
 
